@@ -1,8 +1,9 @@
 /UserData*
-*.csv
-main.py
 __pycache__/
 WhatsApp-Selenium.zip
-QRCode.png
-test.py
 Searched \!.png
+venv
+logs
+tester.ipynb
+.env
+Error.png

@@ -1,23 +1,20 @@
-# URGENT FIX \n
-# CONVERT \n to selenium KEY shift+enter
-
+from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
-
-import csv
+from selenium.webdriver.chrome.service import Service
+from logger_config import logger
 import os
 import sys
 import time
-import asyncio
+from dotenv import load_dotenv
 
 
-print("User data will be saved in: {}".format(
-    os.path.join(sys.path[0], "UserData")))
-
+# Load .env file
+load_dotenv()
 
 class Whatsapp:
     def __init__(self, executable_path=None, silent=False, headless=False):
@@ -30,321 +27,131 @@ class Whatsapp:
             self.__addOption("--window-size=1920,1080")
             self.__addOption("--no-sandbox")
 
+            # Get absolute path to directory where the script is located
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        user_data_dir = os.path.join(base_dir, "UserData")
+        os.makedirs(user_data_dir, exist_ok=True)
 
-        self.__addOption(
-            "user-data-dir={}".format(os.path.join(sys.path[0], "UserData")))
+
+        self.__addOption(f"user-data-dir={user_data_dir}")
+
+        # Use the actual path to your downloaded chromedriver
+        service = Service(os.getenv("CHROME_DRIVER", ""))
 
         if executable_path:
-            self.browser = webdriver.Chrome(
+            self.browser = webdriver.Chrome(service = service,
                 options=self.options, executable_path=executable_path)
         else:
-            self.browser = webdriver.Chrome(options=self.options)
-
-    def test(self):
-        self.browser.get('https://www.google.com')
-        print(self.browser.title)
+            self.browser = webdriver.Chrome(service = service, options=self.options)
 
     def __addOption(self, option):
         self.options.add_argument(option)
 
-    def login(self):
-        self.browser.get('https://web.whatsapp.com')
-        if not self.__isLogin():
-            print("Please scan the QR code")
-            print("After 3 sec - Screenshot of QR code will be saved in: {}".format(
-                os.path.join(sys.path[0], "QRCode.png")))
-            time.sleep(3)
-            self.browser.save_screenshot(
-                os.path.join(sys.path[0], "QRCode.png"))
-            while not self.__isLogin():
-                pass
-            print("Login successful")
-        else:
-            print("Already logged in")
-
-    def __isLogin(self):
-        try:
-            # Landing Page (Login QR Code page)
-            self.browser.find_element(By.CLASS_NAME, "landing-wrapper")
-        except:
-            try:
-                # Logged in (Chat list)
-                self.browser.find_element(By.CLASS_NAME, "two")
-                return True
-            except:
-                time.sleep(3)
-                self.__isLogin()
-        return False
-
-    def __wait(self, cName, timeout=60):
-        print("Waiting for element: {}".format(cName),
-              " To load, timeout: {}".format(timeout), " seconds remaining")
+    def _waitFor(self, key, type, timeout=60):
+        logger.info(f"Waiting for element: {key}  To load, timeout: {timeout}  seconds remaining")
         wait = WebDriverWait(self.browser, timeout)
         try:
-            element = wait.until(
-                EC.presence_of_element_located((By.CLASS_NAME, cName)))
-        except:
-            exit("Element not found")
+            element = wait.until(EC.presence_of_element_located((type, key)))
+        except Exception as e:
+            #call slack
+            logger.error(f"Error: Element not found or timed out - {key}")
+            self.browser.save_screenshot(os.path.join(sys.path[0], "Error.png"))
+            raise
         return element
 
-    def __saveToCSV(self, data, name):
-        fileName = name + ".csv"
-        with open(fileName, 'w', encoding="utf-8", newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(("Date", "Sender", "Message",
-                            "Replied To", "Replied Message"))
-            writer.writerows(data)
-            # for item in data:
-            #     writer.writerows(item[0], item[1], item[2], item[3])
+    def __waitForLink(self, cName):
+        self._waitFor(cName, By.LINK_TEXT)
+    
+    def __waitForXPath(self, cName):
+        self._waitFor(cName, By.XPATH)
 
-    def __search(self, query):
-        self.browser.find_element(
-            By.CLASS_NAME, "copyable-text").send_keys(query)
-        self.browser.save_screenshot(
-                os.path.join(sys.path[0], "Searched !.png"))
-        time.sleep(0.25)
-        return self.browser.find_element(By.CLASS_NAME,"matched-text")
+    def __waitForClassLike(self, cName):
+        self._waitFor(f"//button[contains(@class, '{cName}')]", By.XPATH)
+    
+    def clickOnLink(self, link): 
+        self.__waitForLink(link)
+        button = self.browser.find_element(By.LINK_TEXT, link)
+        button.click()
 
-    def __scrollToTop(self, e):
-        e[0].click()
-
-    def __scrollToBottom(self, e):
-        pass
-
-# Scroll up waiting for DOM to not change anymore. Means we reached the top
-# Incremental waits of 1 and 3 seconds are used to avoid false positives
-    def __sendPageUP(self, count):
-        for i in range(count):
-            ActionChains(self.browser).send_keys(Keys.PAGE_UP).perform()
-            time.sleep(0.1)
-
-    def __scrollToView(self, e):
-        ee = self.browser.find_elements(By.CLASS_NAME, e)
-        ee[0].click()
-        while True:
-            self.__sendPageUP(5)
-            oldPage = self.browser.page_source
-            if oldPage == self.browser.page_source:
-                time.sleep(1)
-                self.__sendPageUP(10)
-                oldPage = self.browser.page_source
-                if oldPage == self.browser.page_source:
-                    time.sleep(3)
-                    self.__sendPageUP(30)
-                    oldPage = self.browser.page_source
-                    if oldPage == self.browser.page_source:
-                        time.sleep(10)
-                        self.__sendPageUP(60)
-                        oldPage = self.browser.page_source
-                        if oldPage == self.browser.page_source:
-                            break
-
-    def __scroll(self, count, e):
-        for i in range(count):
-            self.__sendPageUP(10)
-            time.sleep(1.5)
-
-
-###################################### READ MESSAGES #######################################
-
-    def getChats(self):
-        self.__wait("two")
-        chats = self.browser.find_elements(By.CLASS_NAME, "_11JPr")
-        for chat in chats:
-            if (chat.text == ""):
-                continue
-            print(chat.text)
-
-    def __openChat(self, q):
-        # Get the first chat from search results
-        ActionChains(self.browser).move_to_element(
-                    self.__search(q)).click().click().perform()
-
-
-    def __getChatName(self):
-        return self.browser.find_element(By.CLASS_NAME, "_3W2ap").text
-
-    def getMessages(self, chatName, all=False, scroll=None, manualSync=False, element="_1AOLJ._1jHIY"):
-        self.__openChat(chatName)
+    def writeInput(self, msg):
+        self.__waitForXPath('//div[@aria-label="Type a message"]')
+        actions = ActionChains(self.browser)
+        textbox = self.browser.find_elements(By.XPATH, '//div[@role="textbox"]')[-1]
+        textbox.send_keys(Keys.CONTROL + "a")
+        textbox.send_keys(Keys.DELETE)
         
-        self.__wait(element)
+        for line in msg.split('\n'):
+            actions.send_keys(line)
+            actions.key_down(Keys.SHIFT).send_keys(Keys.ENTER).key_up(Keys.SHIFT)
+        actions.perform()  
 
-        self.browser.find_elements(By.CLASS_NAME, element)[0].click()
+    def clickSend(self):
+        self.__waitForClassLike("x1c4vz4f")
+        send_button = self.browser.find_element(By.XPATH, "//button[contains(@class, 'x1c4vz4f')]")
+        send_button.click()
 
-        if manualSync:
-            print("Please sync manually | Press Enter to continue")
-            input()
-        else:
-            if scroll:
-                self.__scroll(scroll, element)
-
-            if all:
-                self.__scrollToView(element)
-
-        time.sleep(3)
-        messages = self.browser.find_elements(By.CLASS_NAME, element)
-
-        fetchedMessages = []
-        for message in messages:
-            msg = self.__parseMessage(message)
-            fetchedMessages.append(msg)
-            print(msg)
-            print("------------------")
-
-        self.__saveToCSV(fetchedMessages, self.__getChatName())
-
-    def getMessagesOutgoing(self, chatName, all=False, scroll=None, manualSync=False):
-        self.getMessages(chatName, all, scroll, manualSync, "message-out")
-
-    def getMessagesIncomming(self, chatName, all=False, scroll=None, manualSync=False):
-        self.getMessages(chatName, all, scroll, manualSync, "message-in")
-
-    # Call given function with every new incomming message
-
-    def hookIncomming(self, chatName, func):
-        self.oldHookedMessage = None
-        asyncio.run(self.__hookIncomming(chatName, func))
-
-    async def __hookIncomming(self, chatName, func):
-        self.__openChat(chatName)
-        time.sleep(0.1)
-        self.browser.save_screenshot(os.path.join(sys.path[0], "Waiting.png"))
-        self.__wait("message-in")
-
-        message = self.browser.find_elements(By.CLASS_NAME, "message-in")[-1]
-
-        while True:
-            while self.oldHookedMessage == message:
-                await asyncio.sleep(0.1)
-                message = self.browser.find_elements(
-                    By.CLASS_NAME, "message-in")[-1]
-
-            await asyncio.create_task(func(message, self.__parseMessage(message)))
-            self.oldHookedMessage = message
-
-    def replyTo(self, element, msg):
-        totalretries = 5
-        dropDown = 'span[data-testid="down-context"][data-icon="down-context"]'
-
-        # Try again and again. As new message cancels the all clicks.
-        while True and totalretries > 0:
+    def isMessageSent(self):
+        start_time = time.time()  # Capture time at start
+        # Find all matching elements
+        elements = self.browser.find_elements(By.CSS_SELECTOR, 'span[dir="auto"].x1rg5ohu.x16dsc37')
+        message_sent = False
+        # Get the last one
+        if elements:
+            last_element = elements[-1]
+            last_timestamp_str = last_element.text
+            #logger.info(f"Last timestamp:{last_element.text}")
+            
+            # Get current time
+            now = datetime.now()
+            # Parse both times as datetime objects (set today's date so they're comparable)
+            today_str = now.strftime('%Y-%m-%d')
+            last_timestamp_dt = datetime.now()
             try:
-                # Click the message to make the drop down appear
-                ActionChains(self.browser).move_to_element(
-                    element.find_elements(By.CLASS_NAME, "l7jjieqr.fewfhwl7")[0]).click().perform()
+               #logger.info(f"last stamp: {today_str} {last_timestamp_str}")
+               last_timestamp_dt = datetime.strptime(f"{today_str} {last_timestamp_str}", '%Y-%m-%d %H:%M')
+            except Exception as e:
+                #call slack
+                logger.error(f"Error in timestamp format")
+                raise
+            
+            # Difference in minutes
+            difference = abs((now - last_timestamp_dt).total_seconds() / 60)
+           
+            if difference <= 1:
+                logger.info("Timestamps are the same or within 1 minute.")
+                status = self.browser.find_elements(By.XPATH, '//span[@aria-label]')[-1].get_attribute("aria-label").strip()
+                logger.info (f"status: -{status}-")
+                while status.lower() != "delivered" and status.lower() != "sent":
+                    try:
+                        time.sleep(2)  # Wait 2 seconds before checking again
+                        status = self.browser.find_elements(By.XPATH, '//span[@aria-label]')[-1].get_attribute("aria-label").strip()
+                        logger.info (f"status: -{status}-")
+                        current_time = time.time()
+                        elapsed = current_time - start_time
+                        if (elapsed > 60):
+                            logger.error('More than 60 seconds passed')
+                            break
+                    except Exception as e:
+                        logger.error(f"Error while waiting for the status to change {e}")
 
-                # Click Drowndown
-                dropDown = self.browser.find_element(By.CSS_SELECTOR, dropDown)
-                ActionChains(self.browser).move_to_element(
-                    dropDown).click().perform()
-
-                # Click Reply
-                time.sleep(0.1)  # Wait for the reply button to appear
-
-                self.browser.find_element(
-                    By.CSS_SELECTOR, 'div[aria-label="Reply"]').click()
-
-                # Send the message
-                self.sendMessage(msg)
-                break
-            except:
-                print("Failed ! Retrying... tries left: " + str(totalretries))
-                time.sleep(0.25)
-                totalretries -= 1
-                pass
-
-    def sendMessage(self, msg):
-        # Click on message box
-        myElem = self.browser.find_element(
-            By.XPATH, "/html/body/div[1]/div/div/div[5]/div/footer/div[1]/div/span[2]/div/div[2]/div[1]/div/div[2]")
-        ActionChains(self.browser).move_to_element(myElem).click().perform()
-        ActionChains(self.browser).send_keys(msg).perform()
-        # Click send button
-        self.browser.find_element(
-            By.XPATH, "/html/body/div[1]/div/div/div[5]/div/footer/div[1]/div/span[2]/div/div[2]/div[2]/button").click()
-
-    def __parseMessage(self, message):
-        try:
-            msg = message.find_element(
-                By.CLASS_NAME, "_21Ahp").text
-        except:
-            msg = "MEDIA"
-
-        try:  # For all chat
-            # Check for reply
-            repliedMsg = message.find_element(
-                By.CLASS_NAME, "quoted-mention._11JPr").text
-            # If didnt crash, means there is reply
-            # Check for reply to for Other
-            try:
-                repliedTo = message.find_elements(
-                    By.CLASS_NAME, "_3FuDI._11JPr")[-1].text  # Any Reply to Other Person
-                # Check if you exists somehwere
-                for z in message.find_elements(By.CLASS_NAME, "_11JPr"):
-                    if "You" in z.text:
-                        repliedTo = "You"
-            except:  # Wildcard reply to me
-                repliedTo = "You"  # Reply to me
-
-        except:  # There is not a reply
-            repliedTo = "NONE"
-            repliedMsg = "NONE"
-
-        try:
-            date = message.find_elements(
-                By.CLASS_NAME, "l7jjieqr.fewfhwl7")[-1].text
-        except:
-            date = "NONE"
-
-        # Try to get sender name if none means private chat
-        try:
-            # Other person name in group chat
-            msgSender = message.find_element(
-                By.CLASS_NAME, "_3IzYj._6rIWC.p357zi0d").text
-        except:  # For private chat
-            if "message-out" in message.get_attribute("class"):
-                msgSender = "You"  # My name in private chat and group chat
+                message_sent = True
             else:
-                # Other person name in Private chat and group chat where they spam messages one after other
-                try:
-                    data_plain_t = message.find_elements(
-                        By.CLASS_NAME, "copyable-text")[0].get_attribute('data-pre-plain-text')
-                    msgSender = data_plain_t[data_plain_t.find(
-                        "] ")+2:-2]  # Parse name from data
-                except:
-                    msgSender = self.__getChatName()
+                logger.error(f"Timestamps differ by more than 1 minute ({difference:.1f} minutes).")
+            
+        else:
+            logger.error("No matching elements found.")
 
-        # Different wordarounds | Should be solved
-        if msg == "":
-            msg = "Emoji"
-        if repliedMsg == "":
-            repliedMsg = "Emoji"
-        if len(repliedMsg) == 4 and repliedMsg[1] == ":":
-            repliedMsg = "VOICE NOTE"
-        return (date, msgSender, msg, repliedTo, repliedMsg)
+        return message_sent
+    
+    def sendMessage(self, msg: str, phoneNumber: str):
+        self.browser.get(f'https://wa.me/{phoneNumber}')
+        logger.info(f'https://wa.me/{phoneNumber}')
+        # time.sleep(150) 
+        self.clickOnLink("Continue to Chat")
+        self.clickOnLink("use WhatsApp Web")
+        self.writeInput(msg)    
+        self.clickSend()
+        time.sleep(10) 
+ 
 
-
-# if __name__ == "__main__":
-
-#     # bot = Whatsapp(silent=True, headless=True)
-#     # bot.login()
-
-#     # responses = {"hello": "Hello, Nice to meet you !", "How are you ?": "I'm fine, thank you !",
-#     #              "Who are you ?": "My name is RevBot, I'm a chatbot made by AbdulRahman Nadeem."}
-
-#     # async def func(element, msg):
-#     #     print(msg)
-#     #     if (msg[2] == "EXIT!"):
-#     #         bot.browser.close()
-#     #         exit()
-
-#     #     if (msg[2].lower() == "help"):
-#     #         bot.replyTo(
-#     #             element, str("My commands are : " + str(responses)))
-#     #     else:
-#     #         try:
-#     #             bot.replyTo(element, responses[msg[2].lower()])
-#     #         except:
-#     #             bot.replyTo(element, "I don't understand !")
-
-#     # bot.hookIncomming("AbdulRahman", func)
+        return self.isMessageSent()
