@@ -48,7 +48,7 @@ class Whatsapp:
         self.options.add_argument(option)
 
     def _waitFor(self, key, type, timeout=60):
-        logger.info(f"Waiting for element: {key}  To load, timeout: {timeout}  seconds remaining")
+        logger.info(f"Waiting for: {key}")
         wait = WebDriverWait(self.browser, timeout)
         try:
             element = wait.until(EC.presence_of_element_located((type, key)))
@@ -118,7 +118,7 @@ class Whatsapp:
             difference = abs((now - last_timestamp_dt).total_seconds() / 60)
            
             if difference <= 1:
-                logger.info("Timestamps are the same or within 1 minute.")
+                #logger.info("Timestamps are the same or within 1 minute.")
                 status = self.browser.find_elements(By.XPATH, '//span[@aria-label]')[-1].get_attribute("aria-label").strip()
                 logger.info (f"status: -{status}-")
                 while status.lower() != "delivered" and status.lower() != "sent":
@@ -151,7 +151,7 @@ class Whatsapp:
         self.clickOnLink("use WhatsApp Web")
         self.writeInput(msg)    
         self.clickSend()
-        time.sleep(10) 
+        time.sleep(2) 
  
 
         return self.isMessageSent()

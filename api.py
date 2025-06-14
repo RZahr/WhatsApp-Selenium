@@ -16,11 +16,13 @@ async def whatsapp(data: dict):
     print(f"message: {message}")
 
     whatsapp = Whatsapp(silent=True, headless=False)
+    logger.info(f"request2: {data}")
     status = False
     try:
         status = { "status": whatsapp.sendMessage(message, mobileNumber) }
     except Exception as e:
         status = False
+        # logger.info(f"Error: {e}")
         raise HTTPException(status_code=500, detail="Failed to send WhatsApp message")
 
     logger.info(f"status result: {status}")
