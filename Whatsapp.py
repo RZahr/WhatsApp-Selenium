@@ -73,6 +73,11 @@ class Whatsapp:
         button = self.browser.find_element(By.LINK_TEXT, link)
         button.click()
 
+    def clickOnCSSSelected(self, link):
+        self._waitFor(link, By.CSS_SELECTOR)
+        button = self.browser.find_element(By.CSS_SELECTOR, link)
+        button.click()   
+
     def writeInput(self, msg):
         self.__waitForXPath('//div[@aria-label="Type a message"]')
         actions = ActionChains(self.browser)
@@ -120,8 +125,8 @@ class Whatsapp:
             if difference <= 1:
                 #logger.info("Timestamps are the same or within 1 minute.")
                 status = self.browser.find_elements(By.XPATH, '//span[@aria-label]')[-1].get_attribute("aria-label").strip()
-                logger.info (f"status: -{status}-")
-                while status.lower() != "delivered" and status.lower() != "sent":
+                logger.info (f"status here: -{status}-")
+                while status.lower() != "delivered" and status.lower() != "sent" and status.lower() != "read":
                     try:
                         time.sleep(2)  # Wait 2 seconds before checking again
                         status = self.browser.find_elements(By.XPATH, '//span[@aria-label]')[-1].get_attribute("aria-label").strip()
@@ -133,14 +138,13 @@ class Whatsapp:
                             break
                     except Exception as e:
                         logger.error(f"Error while waiting for the status to change {e}")
-
                 message_sent = True
             else:
                 logger.error(f"Timestamps differ by more than 1 minute ({difference:.1f} minutes).")
             
         else:
             logger.error("No matching elements found.")
-
+        logger.info (f"message sent")
         return message_sent
     
     def sendMessage(self, msg: str, phoneNumber: str):
@@ -151,7 +155,33 @@ class Whatsapp:
         self.clickOnLink("use WhatsApp Web")
         self.writeInput(msg)    
         self.clickSend()
-        time.sleep(2) 
+       # time.sleep(2) 
+        SENT = self.isMessageSent()
+        #self.browser.quit()
+        return SENT
+    
+    def uploadFile(self, msg: str, filePath: str, phoneNumber: str):
+        self.browser.get(f'https://wa.me/{phoneNumber}')
+        logger.info(f'https://wa.me/{phoneNumber}')
+        # time.sleep(150) 
+        self.clickOnLink("Continue to Chat")
+        self.clickOnLink("use WhatsApp Web")
+        
+        self.clickOnCSSSelected("span[data-icon='plus-rounded']")
+        self._waitFor("li[role='button'] input[type='file'][accept*='image']", By.CSS_SELECTOR)
+        photo_video_input = WebDriverWait(self.browser, 10).until(
+            EC.presence_of_element_located((
+                By.CSS_SELECTOR,
+                "li[role='button'] input[type='file'][accept*='image']"
+            ))
+        )
+        filePath = f"C:\Inetpub\wwwroot\ClientAssessments\{filePath}"
+        photo_video_input.send_keys(filePath)
+        self.clickOnCSSSelected("div[aria-label='Send'][role='button']")
+        self.writeInput(msg)    
+        self.clickSend()
+       # time.sleep(2) 
  
-
-        return self.isMessageSent()
+        SENT = self.isMessageSent()
+        self.browser.quit()
+        return SENT
