@@ -128,7 +128,7 @@ class Whatsapp:
                 logger.info (f"status here: -{status}-")
                 while status.lower() != "delivered" and status.lower() != "sent" and status.lower() != "read":
                     try:
-                        time.sleep(2)  # Wait 2 seconds before checking again
+                        time.sleep(1)  # Wait 2 seconds before checking again
                         status = self.browser.find_elements(By.XPATH, '//span[@aria-label]')[-1].get_attribute("aria-label").strip()
                         logger.info (f"status: -{status}-")
                         current_time = time.time()
@@ -157,7 +157,7 @@ class Whatsapp:
         self.clickSend()
        # time.sleep(2) 
         SENT = self.isMessageSent()
-        #self.browser.quit()
+        self.browser.quit()
         return SENT
     
     def uploadFile(self, msg: str, filePath: str, phoneNumber: str):
@@ -175,7 +175,7 @@ class Whatsapp:
                 "li[role='button'] input[type='file'][accept*='image']"
             ))
         )
-        filePath = f"C:\Inetpub\wwwroot\ClientAssessments\{filePath}"
+        filePath = fr"C:\Inetpub\wwwroot\ClientAssessments\{filePath}"
         photo_video_input.send_keys(filePath)
         self.clickOnCSSSelected("div[aria-label='Send'][role='button']")
         self.writeInput(msg)    
